@@ -4,85 +4,66 @@ on:
   workflow_dispatch:
     inputs:
       terraform_action:
-        description: 'Terraform action to perform'
+        description: "Terraform action to perform"
         required: true
-        default: 'plan'
+        default: "plan"
         type: choice
         options:
           - plan
           - apply
       repositories:
-        description: 'Repositories to process (comma-separated)'
+        description: "Repositories to process (comma-separated)"
         required: true
-        default: 'asg-1,repo-2'
+        default: "asg-1,repo-2"
         type: string
-  
-  repository_dispatch:
-    types: [terraform-trigger]
 
 jobs:
-  determine-repo:
-    runs-on: ubuntu-latest
-    outputs:
-      repos: ${{ steps.set-repos.outputs.repos }}
-    steps:
-      - name: Set repositories to process
-        id: set-repos
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "repos=['${{ github.event.client_payload.repository }}']" >> $GITHUB_OUTPUT
-          else
-            REPOS="${{ github.event.inputs.repositories }}"
-            REPOS_JSON="[$(echo $REPOS | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')]"
-            echo "repos=$REPOS_JSON" >> $GITHUB_OUTPUT
-          fi
-
   terraform:
-    needs: determine-repo
-    name: 'Terraform'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: ${{ fromJson(needs.determine-repo.outputs.repos) }}
+        repo: ${{ fromJson('["asg-1"]') }}  # Dynamically set this based on inputs
 
     steps:
-    - name: Debug Info
-      run: |
-        echo "Current directory: $(pwd)"
-        echo "Processing repository: ${{ matrix.repo }}"
+      - name: Remove Default Repo (`dope`)
+        run: rm -rf ${{ github.workspace }}/*
 
-    - name: Checkout Target Repository
-      uses: actions/checkout@v3
-      with:
-        repository: ${{ github.repository_owner }}/${{ matrix.repo }}
-        ref: ${{ github.event.client_payload.branch || 'main' }}
-        token: ${{ secrets.PAT_TOKEN }}
+      - name: Checkout Target Repository (${{ matrix.repo }})
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository_owner }}/${{ matrix.repo }}
+          ref: main
+          path: terraform-repo
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: '1.5.0'
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.0"
 
-    - name: Terraform Init
-      working-directory: environments/prod
-      run: terraform init
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
-    - name: Terraform Validate
-      working-directory: environments/prod
-      run: terraform validate
+      - name: Terraform Init
+        working-directory: terraform-repo/environments/dev
+        run: terraform init
 
-    - name: Terraform Plan
-      working-directory: environments/prod
-      run: |
-        terraform plan -out=tfplan
-        
-    - name: Terraform Apply
-      if: |
-        github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply' ||
-        github.event_name == 'repository_dispatch' && github.event.client_payload.action == 'apply'
-      working-directory: environments/prod
-      run: terraform apply -auto-approve tfplan
+      - name: Terraform Validate
+        working-directory: terraform-repo/environments/dev
+        run: terraform validate
 
-    - name: Clean up
-      working-directory: environments/prod
-      run: rm -f tfplan
+      - name: Terraform Plan
+        working-directory: terraform-repo/environments/dev
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.terraform_action == 'apply'
+        working-directory: terraform-repo/environments/dev
+        run: terraform apply -auto-approve tfplan
+
+      - name: Clean Up
+        working-directory: terraform-repo/environments/dev
+        run: rm -f tfplan
