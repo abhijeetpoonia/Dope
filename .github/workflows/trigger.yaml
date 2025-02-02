@@ -56,10 +56,10 @@ jobs:
         working-directory: enviroments/prod
         run: |
           terraform init \
-            -backend-config="bucket=asgbucket121" \
-            -backend-config="key=asg/${{ steps.set_repo.outputs.repository }}/terraform.tfstate" \
-            -backend-config="region=ap-south-1" \
-            -backend-config="encrypt=true"
+          -backend-config="bucket=asgbucket121" \
+          -backend-config="key=asg/${{ steps.set_repo.outputs.repository }}/terraform.tfstate" \
+          -backend-config="region=ap-south-1" \
+          -backend-config="encrypt=true"
 
       - name: Terraform Validate
         id: validate
@@ -67,41 +67,46 @@ jobs:
         run: terraform validate -no-color
 
       - name: Terraform Plan
-        if: |
-          github.event.client_payload.action == 'plan' || github.event.inputs.terraform_action == 'plan'
         id: plan
         working-directory: enviroments/prod
-        run: terraform plan -no-color -out=tfplan
+        run: |
+          terraform plan -no-color -out=tfplan
+          # Capture the plan output for PR comment
+          terraform show -no-color tfplan > plan.txt
+          echo "PLAN_OUTPUT<<EOF" >> $GITHUB_ENV
+          cat plan.txt >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Update Pull Request
         if: |
-          github.event.client_payload.pr_number != '' && github.event.client_payload.action == 'plan'
+          github.event.client_payload.pr_number != '' && 
+          github.event.client_payload.action == 'plan'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
-            const output = `#### Terraform Plan Results for ${{ steps.set_repo.outputs.repository }}
+            const output = `#### Terraform Plan Results for \`${{ steps.set_repo.outputs.repository }}\`
             #### Terraform Initialization ✅
             #### Terraform Validation ✅
             #### Terraform Plan 📖
             <details><summary>Show Plan</summary>
-            \
+            \`\`\`terraform
             ${process.env.PLAN_OUTPUT}
-            \
+            \`\`\`
             </details>
-            *Pushed by: @${{ github.actor }}, Action: ${{ github.event_name }}*`;
-            
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: '${{ github.event.client_payload.repository }}',
               issue_number: ${{ github.event.client_payload.pr_number }},
               body: output
-            });
-        env:
-          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
+            })
 
       - name: Terraform Apply
         if: |
-          (github.event.client_payload.action == 'apply' && github.event.client_payload.pr_merged == true) || github.event.inputs.terraform_action == 'apply'
+          (github.event.client_payload.action == 'apply' && 
+          github.event.client_payload.pr_merged == true) || 
+          github.event.inputs.terraform_action == 'apply'
         working-directory: enviroments/prod
         run: terraform apply -auto-approve tfplan
