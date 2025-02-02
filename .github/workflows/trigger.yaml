@@ -58,13 +58,6 @@ jobs:
         ref: ${{ github.event.client_payload.branch || 'main' }}
         token: ${{ secrets.PAT_TOKEN }}
 
-    - name: Verify Directory Structure
-      run: |
-        echo "Contents of current directory:"
-        ls -la
-        echo "Contents of environments/prod (if exists):"
-        ls -la environments/prod || echo "Directory not found"
-
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
