@@ -53,7 +53,7 @@ jobs:
 
       - name: Terraform Init
         id: init
-        working-directory: environments/prod
+        working-directory: enviroments/prod
         run: |
           terraform init \
             -backend-config="bucket=asgbucket121" \
@@ -63,14 +63,14 @@ jobs:
 
       - name: Terraform Validate
         id: validate
-        working-directory: environments/prod
+        working-directory: enviroments/prod
         run: terraform validate -no-color
 
       - name: Terraform Plan
         if: |
           github.event.client_payload.action == 'plan' || github.event.inputs.terraform_action == 'plan'
         id: plan
-        working-directory: environments/prod
+        working-directory: enviroments/prod
         run: terraform plan -no-color -out=tfplan
 
       - name: Update Pull Request
@@ -103,5 +103,5 @@ jobs:
       - name: Terraform Apply
         if: |
           (github.event.client_payload.action == 'apply' && github.event.client_payload.pr_merged == true) || github.event.inputs.terraform_action == 'apply'
-        working-directory: environments/prod
+        working-directory: enviroments/prod
         run: terraform apply -auto-approve tfplan
