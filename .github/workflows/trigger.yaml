@@ -17,7 +17,7 @@ on:
         default: "asg-1,ec2"
         type: string
   repository_dispatch:
-    types: [terraform-trigger, pr-trigger]
+    types: [pr-trigger]
 
 jobs:
   terraform:
@@ -70,10 +70,10 @@ jobs:
         id: plan
         working-directory: enviroments/prod
         run: |
-          # Save plan output to a file with proper formatting
-          terraform plan -no-color -out=tfplan > plan_output.txt 2>&1
+          terraform plan -no-color -out=tfplan
+          terraform plan -no-color > plan.txt
           echo "PLAN_OUTPUT<<EOF" >> $GITHUB_ENV
-          cat plan_output.txt >> $GITHUB_ENV
+          cat plan.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Update Pull Request
@@ -85,18 +85,15 @@ jobs:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             const output = `#### Terraform Plan Results for \`${{ steps.set_repo.outputs.repository }}\`
-
+            #### Terraform Initialization ✅
+            #### Terraform Validation ✅
+            #### Terraform Plan 📖
             <details><summary>Show Plan</summary>
-
-            \`\`\`diff
+            \`\`\`terraform
             ${process.env.PLAN_OUTPUT}
             \`\`\`
-
             </details>
-
-            * Plan generated at: \`${new Date().toISOString()}\`
-            * Pushed by: @${{ github.actor }}
-            * Action: \`${{ github.event_name }}\``;
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
