@@ -1,0 +1,91 @@
+name: Multi-Repo Terraform Workflow
+
+on:
+  # Manual trigger with repository selection
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+      repositories:
+        description: 'Repositories to process (comma-separated)'
+        required: true
+        default: 'repo-1,repo-2'
+        type: string
+  
+  # Automated trigger from repository webhook events
+  repository_dispatch:
+    types: [terraform-trigger]
+
+jobs:
+  determine-repo:
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.set-repos.outputs.repos }}
+    steps:
+      - name: Set repositories to process
+        id: set-repos
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "repos=['${{ github.event.client_payload.repository }}']" >> $GITHUB_OUTPUT
+          else
+            # Convert comma-separated string to JSON array
+            REPOS="${{ github.event.inputs.repositories }}"
+            REPOS_JSON="[$(echo $REPOS | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')]"
+            echo "repos=$REPOS_JSON" >> $GITHUB_OUTPUT
+          fi
+
+  terraform:
+    needs: determine-repo
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ${{ fromJson(needs.determine-repo.outputs.repos) }}
+
+    steps:
+    - name: Checkout Workflow Repository
+      uses: actions/checkout@v3
+      with:
+        path: workflow-repo
+
+    - name: Checkout Target Repository
+      uses: actions/checkout@v3
+      with:
+        repository: ${{ github.repository_owner }}/${{ matrix.repo }}
+        path: ${{ matrix.repo }}
+        token: ${{ secrets.PAT_TOKEN }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: '1.5.0'
+
+    - name: Terraform Init
+      working-directory: ${{ matrix.repo }}
+      run: terraform init
+
+    - name: Terraform Validate
+      working-directory: ${{ matrix.repo }}
+      run: terraform validate
+
+    - name: Terraform Plan
+      working-directory: ${{ matrix.repo }}
+      run: |
+        terraform plan -out=tfplan
+        
+    - name: Terraform Apply
+      if: |
+        github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply' ||
+        github.event_name == 'repository_dispatch' && github.event.client_payload.action == 'apply'
+      working-directory: ${{ matrix.repo }}
+      run: terraform apply -auto-approve tfplan
+
+    - name: Clean up
+      working-directory: ${{ matrix.repo }}
+      run: rm -f tfplan
