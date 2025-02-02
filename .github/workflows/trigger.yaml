@@ -23,52 +23,71 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Use the repository name that triggered the workflow
-        repo: 
-          - ${{ github.event.repository.name }}
+        repo: ${{ fromJson('["asg-1", "ec2"]') }}
     steps:
+      - name: Check if should process repository
+        id: check_repo
+        run: |
+          TRIGGER_REPO="${{ github.event.client_payload.repository }}"
+          CURRENT_REPO="${{ matrix.repo }}"
+          if [[ "$TRIGGER_REPO" == "$CURRENT_REPO" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_process=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_process=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: Remove Default Repo
+        if: steps.check_repo.outputs.should_process == 'true'
         run: rm -rf ${{ github.workspace }}/*
-      
+
       - name: Checkout Target Repository (${{ matrix.repo }})
+        if: steps.check_repo.outputs.should_process == 'true'
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository_owner }}/${{ matrix.repo }}
           ref: prod
           path: ${{ matrix.repo }}
-      
+
       - name: Setup Terraform
+        if: steps.check_repo.outputs.should_process == 'true'
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: "1.5.0"
-          
+
       - name: Configure AWS Credentials
+        if: steps.check_repo.outputs.should_process == 'true'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
-          
+
       - name: Verify Directory Structure
+        if: steps.check_repo.outputs.should_process == 'true'
         run: ls -R ${{ matrix.repo }}
-        
+
       - name: Terraform Init
+        if: steps.check_repo.outputs.should_process == 'true'
         working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform init
-        
+
       - name: Terraform Validate
+        if: steps.check_repo.outputs.should_process == 'true'
         working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform validate
-        
+
       - name: Terraform Plan
+        if: steps.check_repo.outputs.should_process == 'true'
         working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform plan -out=tfplan
-        
+
       - name: Terraform Apply
-        if: github.event.inputs.terraform_action == 'apply'
+        if: steps.check_repo.outputs.should_process == 'true' && github.event.inputs.terraform_action == 'apply'
         working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform apply -auto-approve tfplan
-        
+
       - name: Clean Up
+        if: steps.check_repo.outputs.should_process == 'true'
         working-directory: ${{ matrix.repo }}/enviroments/prod
         run: rm -f tfplan
