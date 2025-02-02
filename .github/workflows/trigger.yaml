@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: ${{ join(split(github.event.inputs.repositories, ','), '","') }}
+        repo:  ${{ fromJson('["asg-1"]') }} 
     steps:
       - name: Remove Default Repo (`dope`)
         run: rm -rf ${{ github.workspace }}/*
