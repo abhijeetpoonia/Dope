@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo:  ${{ fromJson('["asg-1"] ,["ec2"] ') }} 
+        repo:  ${{ fromJson('["asg-1", "ec2"]') }}
     steps:
       - name: Remove Default Repo (`dope`)
         run: rm -rf ${{ github.workspace }}/*
