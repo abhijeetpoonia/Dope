@@ -16,6 +16,8 @@ on:
         required: true
         default: "asg-1,repo-2"
         type: string
+  repository_dispatch:  # ✅  
+   types: [terraform-trigger]
 
 jobs:
   terraform:
