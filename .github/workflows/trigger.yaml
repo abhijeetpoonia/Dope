@@ -1,3 +1,5 @@
+=======================================================================
+
 name: Multi-Repo Terraform Workflow
 
 on:
@@ -17,7 +19,7 @@ on:
         default: "asg-1,ec2"
         type: string
   repository_dispatch:
-    types: [pr-trigger]
+    types: [terraform-trigger, pr-trigger]
 
 jobs:
   terraform:
@@ -70,10 +72,10 @@ jobs:
         id: plan
         working-directory: enviroments/prod
         run: |
-          terraform plan -no-color -out=tfplan
-          terraform plan -no-color > plan.txt
+          # Save plan output to a file with proper formatting
+          terraform plan -no-color -out=tfplan > plan_output.txt 2>&1
           echo "PLAN_OUTPUT<<EOF" >> $GITHUB_ENV
-          cat plan.txt >> $GITHUB_ENV
+          cat plan_output.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Update Pull Request
@@ -85,15 +87,18 @@ jobs:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             const output = `#### Terraform Plan Results for \`${{ steps.set_repo.outputs.repository }}\`
-            #### Terraform Initialization ✅
-            #### Terraform Validation ✅
-            #### Terraform Plan 📖
+
             <details><summary>Show Plan</summary>
-            \`\`\`terraform
+
+            \`\`\`diff
             ${process.env.PLAN_OUTPUT}
             \`\`\`
+
             </details>
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            * Plan generated at: \`${new Date().toISOString()}\`
+            * Pushed by: @${{ github.actor }}
+            * Action: \`${{ github.event_name }}\``;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
