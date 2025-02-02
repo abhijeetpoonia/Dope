@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: ${{ fromJson(format('["{}"]', replace(github.event.inputs.repositories, ',', '","'))) }}
+        repo: ${{ join(split(github.event.inputs.repositories, ','), '","') }}
     steps:
       - name: Remove Default Repo (`dope`)
         run: rm -rf ${{ github.workspace }}/*
