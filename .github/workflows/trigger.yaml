@@ -52,22 +52,22 @@ jobs:
         run: ls -R ${{ matrix.repo }}
         
       - name: Terraform Init
-        working-directory:  ${{ matrix.repo }}/environments/prod
+        working-directory:  ${{ matrix.repo }}/enviroments/prod
         run: terraform init
 
       - name: Terraform Validate
-        working-directory: ${{ matrix.repo }}/environments/prod
+        working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform validate
 
       - name: Terraform Plan
-        working-directory: ${{ matrix.repo }}/environments/prod
+        working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         if: github.event.inputs.terraform_action == 'apply'
-        working-directory: ${{ matrix.repo }}/environments/prod
+        working-directory: ${{ matrix.repo }}/enviroments/prod
         run: terraform apply -auto-approve tfplan
 
       - name: Clean Up
-        working-directory: ${{ matrix.repo }}/environments/prod
+        working-directory: ${{ matrix.repo }}/enviroments/prod
         run: rm -f tfplan
