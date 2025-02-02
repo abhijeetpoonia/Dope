@@ -15,7 +15,7 @@ on:
       repositories:
         description: 'Repositories to process (comma-separated)'
         required: true
-        default: 'repo-1,repo-2'
+        default: 'asg-1,repo-2'
         type: string
   
   # Automated trigger from repository webhook events
