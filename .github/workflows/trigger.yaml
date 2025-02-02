@@ -14,7 +14,7 @@ on:
       repositories:
         description: "Repositories to process (comma-separated)"
         required: true
-        default: "asg-1,repo-2"
+        default: "asg-1,ec2"
         type: string
   repository_dispatch:  # ✅  
    types: [terraform-trigger]
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo:  ${{ fromJson('["asg-1"]') }} 
+        repo:  ${{ fromJson('["asg-1"] ,["ec2"] ') }} 
     steps:
       - name: Remove Default Repo (`dope`)
         run: rm -rf ${{ github.workspace }}/*
