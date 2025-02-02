@@ -22,38 +22,29 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # This ensures we only process the repository that triggered the workflow
-        repo: ${{ fromJson(format('["%s"]', github.event.client_payload.repository || github.event.inputs.repositories)) }}
     steps:
-      - name: Check Repository
-        id: check_repo
+      - name: Set Repository Name
+        id: set_repo
         run: |
-          echo "Processing repository: ${{ matrix.repo }}"
-          echo "should_process=true" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Remove Default Repo
-        if: steps.check_repo.outputs.should_process == 'true'
-        run: rm -rf ${{ github.workspace }}/*
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "repository=${{ github.event.client_payload.repository }}" >> $GITHUB_OUTPUT
+          else
+            echo "repository=${{ github.event.inputs.repositories }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Checkout Target Repository
-        if: steps.check_repo.outputs.should_process == 'true'
         uses: actions/checkout@v3
         with:
-          repository: ${{ github.repository_owner }}/${{ matrix.repo }}
+          repository: ${{ github.repository_owner }}/${{ steps.set_repo.outputs.repository }}
           ref: ${{ github.event.client_payload.ref || 'prod' }}
-          path: ${{ matrix.repo }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Terraform
-        if: steps.check_repo.outputs.should_process == 'true'
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: "1.5.0"
 
       - name: Configure AWS Credentials
-        if: steps.check_repo.outputs.should_process == 'true'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -61,40 +52,37 @@ jobs:
           aws-region: ap-south-1
 
       - name: Terraform Init
-        if: steps.check_repo.outputs.should_process == 'true'
         id: init
-        working-directory: ${{ matrix.repo }}/enviroments/prod
+        working-directory: enviroments/prod
         run: |
           terraform init \
             -backend-config="bucket=asgbucket121" \
-            -backend-config="key=asg/${{ matrix.repo }}/terraform.tfstate" \
+            -backend-config="key=asg/${{ steps.set_repo.outputs.repository }}/terraform.tfstate" \
             -backend-config="region=ap-south-1" \
             -backend-config="encrypt=true"
 
       - name: Terraform Validate
-        if: steps.check_repo.outputs.should_process == 'true'
         id: validate
-        working-directory: ${{ matrix.repo }}/enviroments/prod
+        working-directory: enviroments/prod
         run: terraform validate -no-color
 
       - name: Terraform Plan
         if: |
-          steps.check_repo.outputs.should_process == 'true' && 
-          (github.event.client_payload.action == 'plan' || github.event.inputs.terraform_action == 'plan')
+          github.event.client_payload.action == 'plan' || 
+          github.event.inputs.terraform_action == 'plan'
         id: plan
-        working-directory: ${{ matrix.repo }}/enviroments/prod
+        working-directory: enviroments/prod
         run: terraform plan -no-color -out=tfplan
 
       - name: Update Pull Request
         if: |
-          steps.check_repo.outputs.should_process == 'true' && 
           github.event.client_payload.pr_number != '' &&
           github.event.client_payload.action == 'plan'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
-            const output = `#### Terraform Plan Results for \`${{ matrix.repo }}\`
+            const output = `#### Terraform Plan Results for \`${{ steps.set_repo.outputs.repository }}\`
             #### Terraform Initialization ✅
             #### Terraform Validation ✅
             #### Terraform Plan 📖
@@ -120,8 +108,7 @@ jobs:
 
       - name: Terraform Apply
         if: |
-          steps.check_repo.outputs.should_process == 'true' && 
-          ((github.event.client_payload.action == 'apply' && github.event.client_payload.pr_merged == true) ||
-           github.event.inputs.terraform_action == 'apply')
-        working-directory: ${{ matrix.repo }}/enviroments/prod
+          (github.event.client_payload.action == 'apply' && github.event.client_payload.pr_merged == true) ||
+          github.event.inputs.terraform_action == 'apply'
+        working-directory: enviroments/prod
         run: terraform apply -auto-approve tfplan
